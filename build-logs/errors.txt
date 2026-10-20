@@ -1,0 +1,4 @@
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+/Users/runner/work/rec/rec/Sources/TacBodycam.swift:25:8: error: invalid redeclaration of 'BodycamGrain'
+/Users/runner/work/rec/rec/Sources/TacBodycam.swift:80:36: error: argument passed to call that takes no arguments
+/Users/runner/work/rec/rec/Sources/Tactical.swift:2726:44: error: argument passed to call that takes no arguments
