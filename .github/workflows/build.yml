@@ -1,0 +1,114 @@
+name: Build IPA
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Prune legacy files
+        run: |
+          keep=" AvatarStudio.swift Lobby.swift MainShotCore.swift Portrait.swift PortraitExtras.swift TacAvatar.swift TacRadar.swift TacSeason.swift TacUI.swift TacWeapons.swift Tactical.swift TacticalScene.swift TowerRig.swift TwProps.swift ViewModel.swift MXCore.swift MXShaders.swift MXRender.swift MXLoader.swift AvatarStage.swift TacFace.swift TacMap.swift TacHUD.swift TacRank.swift TacCS.swift TacCS2.swift TacMaps2.swift TacAttach.swift TacGunsmith.swift TacRaid.swift TacRaid2.swift TacMarket.swift TacStairs.swift TacMapsHarbor.swift TacGrid.swift TacWorkshop.swift TacFrontline.swift TacLobbyHome.swift TacShell.swift TacCustomize.swift TacLoadoutHome.swift TacBodycam.swift TacApartment.swift TacBodycamLobby.swift TacMapEditor.swift TacAnnex.swift TacMuzzle.swift TacFX.swift TacGear.swift TacMap3D.swift TacCamoLab.swift TacOperator.swift "
+          find Sources -name '*.swift' | while IFS= read -r f; do
+            case "$keep" in *" $(basename "$f") "*) ;; *) rm -f "$f" ;; esac
+          done
+          rm -f Resources/responses.txt tools/gen_responses.py
+          rm -rf tools Assets.xcassets/gun_*.imageset
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "build-bot"
+            git config user.email "build-bot@users.noreply.github.com"
+            git add -A
+            git commit -q -m "Prune legacy sources and corpus" || true
+            git push -q origin HEAD:main || true
+          fi
+
+      - name: Generate project
+        run: |
+          set -o pipefail
+          xcodegen generate 2>&1 | tee xcodegen.log
+
+      - name: Build (unsigned)
+        id: build
+        run: |
+          set -o pipefail
+          xcodebuild -project BattleCam.xcodeproj -scheme BattleCam -configuration Release \
+            -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log
+
+      # ---- failure reporting: errors on the run page, in annotations, as an artifact and on a branch ----
+      - name: Collect errors
+        if: failure()
+        run: |
+          touch build.log xcodegen.log
+          grep -E "error:|fatal error:|Undefined symbol|ld: " build.log | sort -u > errors.txt || true
+          if [ ! -s errors.txt ]; then tail -n 80 build.log xcodegen.log > errors.txt; fi
+          {
+            echo "## ❌ Build failed"
+            echo
+            echo "Commit: \`${GITHUB_SHA::7}\`"
+            echo
+            echo '```'
+            head -n 120 errors.txt
+            echo '```'
+            echo
+            echo "Full log: download the **build-log** artifact, or open \`build-logs/errors.txt\` on the **build-logs** branch."
+          } >> "$GITHUB_STEP_SUMMARY"
+          # one red annotation per error, with file + line
+          grep -E "\.swift:[0-9]+:[0-9]+: error:" errors.txt | sort -u | head -n 40 | while IFS= read -r line; do
+            f=$(echo "$line" | sed -E 's/^([^:]+):([0-9]+):([0-9]+): error: (.*)$/\1/')
+            l=$(echo "$line" | sed -E 's/^([^:]+):([0-9]+):([0-9]+): error: (.*)$/\2/')
+            m=$(echo "$line" | sed -E 's/^([^:]+):([0-9]+):([0-9]+): error: (.*)$/\4/')
+            rel="${f#$GITHUB_WORKSPACE/}"
+            echo "::error file=${rel},line=${l}::${m}"
+          done
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: |
+            build.log
+            xcodegen.log
+            errors.txt
+          if-no-files-found: ignore
+
+      - name: Publish errors to build-logs branch
+        if: failure()
+        run: |
+          git config user.name "build-bot"
+          git config user.email "build-bot@users.noreply.github.com"
+          mkdir -p /tmp/bl
+          cp errors.txt /tmp/bl/errors.txt
+          tail -n 400 build.log > /tmp/bl/build-tail.log || true
+          echo "commit ${GITHUB_SHA} run ${GITHUB_RUN_ID}" > /tmp/bl/run.txt
+          git checkout --orphan build-logs
+          git rm -rf . > /dev/null 2>&1 || true
+          mkdir -p build-logs
+          cp /tmp/bl/* build-logs/
+          git add build-logs
+          git commit -m "Build errors for ${GITHUB_SHA::7}" > /dev/null
+          git push -f origin build-logs
+
+      # ---- success path ----
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/BattleCam.app Payload/
+          zip -qry BattleCam.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BattleCam-ipa
+          path: BattleCam.ipa
