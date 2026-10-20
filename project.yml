@@ -1,0 +1,39 @@
+name: BattleCam
+options:
+  bundleIdPrefix: city.battlecam
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  BattleCam:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+      - Resources
+      - Assets.xcassets
+      - path: Info.plist
+        buildPhase: none
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: city.battlecam.game
+        PRODUCT_NAME: BattleCam
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: BattleCam
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGNING_ALLOWED: NO
+        SWIFT_OPTIMIZATION_LEVEL: "-Osize"
+        SWIFT_COMPILATION_MODE: wholemodule
+        DEAD_CODE_STRIPPING: YES
+        STRIP_INSTALLED_PRODUCT: YES
+        COPY_PHASE_STRIP: YES
+        STRIP_SWIFT_SYMBOLS: YES
+        DEBUG_INFORMATION_FORMAT: dwarf
+        ENABLE_BITCODE: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
